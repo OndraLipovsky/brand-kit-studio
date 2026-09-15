@@ -1,127 +1,196 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Navbar from "./components/Navbar.jsx";
 import UrlInputBar from "./components/UrlInputBar.jsx";
 import AnalysisLoading from "./components/AnalysisLoading.jsx";
 import OverviewTab from "./components/tabs/OverviewTab.jsx";
 import ColorsTab from "./components/tabs/ColorsTab.jsx";
 import TypographyTab from "./components/tabs/TypographyTab.jsx";
-import PrintTruckTab from "./components/tabs/PrintTruckTab.jsx";
+import AiCopywritingTab from "./components/tabs/AiCopywritingTab.jsx";
 import AiEmulationTab from "./components/tabs/AiEmulationTab.jsx";
 import PdfExportModal from "./components/PdfExportModal.jsx";
 import AntigravityGuideModal from "./components/AntigravityGuideModal.jsx";
+import HistoryDrawer from "./components/HistoryDrawer.jsx";
+import FleetModal from "./components/FleetModal.jsx";
+import { getSavedBrands, saveBrandToHistory } from "./utils/historyStorage.js";
 import { 
   Sparkles, 
   Palette, 
   Type, 
-  Truck, 
+  MessageSquare, 
   Bot, 
   FileDown 
 } from "lucide-react";
 
-// Default starter brand kit (allows immediate preview)
+// Default initial brand (Kontrast as showcase)
 const initialDemoData = {
-  url: "https://stripe.com",
-  hostname: "stripe.com",
-  brandName: "Stripe",
-  tagline: "Financial infrastructure for the internet. Millions of companies use Stripe to accept payments and manage their businesses online.",
+  url: "https://tskontrast.cz",
+  hostname: "tskontrast.cz",
+  brandName: "Truhlářské studio Kontrast",
+  tagline: "Kuchyně, vestavné skříně a pokoje na míru z Hradce Králové. Návrh, výroba i montáž včetně vody a elektroinstalace.",
   logo: {
     type: "text",
-    textWordmark: "stripe",
-    score: 5,
+    textWordmark: "Kontrast",
+    subtitleWordmark: "Truhlářské studio",
+    score: 9,
     inHeader: true
   },
   logoCandidates: [
-    { type: "text", textWordmark: "stripe", score: 5, inHeader: true }
+    { type: "text", textWordmark: "Kontrast", subtitleWordmark: "Truhlářské studio", score: 9, inHeader: true }
   ],
-  favicon: "https://stripe.com/favicon.ico",
-  allFavicons: [],
+  favicon: "https://tskontrast.cz/favicon.ico",
   palette: [
     {
-      id: "color-1",
-      role: "Primary Brand",
-      label: "Stripe Blurple",
-      hex: "#635bff",
-      rgb: "rgb(99, 91, 255)",
-      hsl: "hsl(243, 100%, 68%)",
-      cmyk: { c: 61, m: 64, y: 0, k: 0, string: "C:61% M:64% Y:0% K:0%" },
-      isDark: true,
-      contrastWhite: 4.8,
-      contrastBlack: 4.4,
-      suggestedUsage: "Main vehicle wrap stripe, hero buttons, primary logo accent"
-    },
-    {
-      id: "color-2",
-      role: "Secondary Brand",
-      label: "Cyan Accent",
-      hex: "#00d4ff",
-      rgb: "rgb(0, 212, 255)",
-      hsl: "hsl(190, 100%, 50%)",
-      cmyk: { c: 100, m: 17, y: 0, k: 0, string: "C:100% M:17% Y:0% K:0%" },
-      isDark: false,
-      contrastWhite: 1.6,
-      contrastBlack: 13.2,
-      suggestedUsage: "High-visibility badges, website highlights, truck accents"
-    },
-    {
-      id: "color-3",
-      role: "Accent",
-      label: "Amber Gold",
-      hex: "#ff70a6",
-      rgb: "rgb(255, 112, 166)",
-      hsl: "hsl(337, 100%, 72%)",
-      cmyk: { c: 0, m: 56, y: 35, k: 0, string: "C:0% M:56% Y:35% K:0%" },
-      isDark: false,
-      contrastWhite: 2.1,
-      contrastBlack: 10.1,
-      suggestedUsage: "Special badge accents, campaign highlights"
-    },
-    {
-      id: "color-4",
-      role: "Dark Neutral",
-      label: "Slate Midnight",
-      hex: "#0a2540",
-      rgb: "rgb(10, 37, 64)",
-      hsl: "hsl(210, 73%, 15%)",
-      cmyk: { c: 84, m: 42, y: 0, k: 75, string: "C:84% M:42% Y:0% K:75%" },
-      isDark: true,
-      contrastWhite: 14.7,
-      contrastBlack: 1.4,
-      suggestedUsage: "Door lettering, phone number, high-contrast vehicle text"
-    },
-    {
-      id: "color-5",
-      role: "Light Neutral",
-      label: "Clean Surface",
-      hex: "#f6f9fc",
-      rgb: "rgb(246, 249, 252)",
-      hsl: "hsl(210, 38%, 98%)",
-      cmyk: { c: 2, m: 1, y: 0, k: 1, string: "C:2% M:1% Y:0% K:1%" },
+      id: "color-bg",
+      role: "Background Canvas",
+      label: "Theme Background Canvas",
+      hex: "#f5f1ea",
+      rgb: "rgb(245, 241, 234)",
+      hsl: "hsl(38, 35%, 94%)",
+      cmyk: { c: 0, m: 2, y: 4, k: 4, string: "C:0% M:2% Y:4% K:4%" },
       isDark: false,
       contrastWhite: 1.1,
-      contrastBlack: 19.5,
-      suggestedUsage: "Vehicle base paint, background surfaces"
+      contrastBlack: 18.6,
+      foundIn: "Browser & Mobile Canvas Theme (`meta theme-color`)",
+      contextSnippet: "<meta name=\"theme-color\" content=\"#F5F1EA\">",
+      suggestedUsage: "Main website canvas, section background, negative space"
+    },
+    {
+      id: "color-dark",
+      role: "Primary Brand",
+      label: "Dark Wood / Typography",
+      hex: "#2b241c",
+      rgb: "rgb(43, 36, 28)",
+      hsl: "hsl(32, 21%, 14%)",
+      cmyk: { c: 0, m: 16, y: 35, k: 83, string: "C:0% M:16% Y:35% K:83%" },
+      isDark: true,
+      contrastWhite: 15.3,
+      contrastBlack: 1.4,
+      foundIn: "FAQ & Divider Accent (<div>) • Frame Borders",
+      contextSnippet: "border:1.5px solid var(--faq-frame, #2B241C)",
+      suggestedUsage: "Core brand identity tone, prominent logo lettering, primary headings"
+    },
+    {
+      id: "color-accent",
+      role: "Micro Accent",
+      label: "Detail Accent Line",
+      hex: "#b23a48",
+      rgb: "rgb(178, 58, 72)",
+      hsl: "hsl(353, 51%, 46%)",
+      cmyk: { c: 0, m: 67, y: 60, k: 30, string: "C:0% M:67% Y:60% K:30%" },
+      isDark: true,
+      contrastWhite: 5.8,
+      contrastBlack: 3.6,
+      foundIn: "FAQ Accent Line (<span>) • Favicon Detail",
+      contextSnippet: "background:var(--faq-accent, #b23a48)",
+      suggestedUsage: "Subtle indicators, accordion active lines, favicon accents"
+    },
+    {
+      id: "color-neutral",
+      role: "Dark Neutral",
+      label: "Deep Slate / Text",
+      hex: "#4a4a4a",
+      rgb: "rgb(74, 74, 74)",
+      hsl: "hsl(0, 0%, 29%)",
+      cmyk: { c: 0, m: 0, y: 0, k: 71, string: "C:0% M:0% Y:0% K:71%" },
+      isDark: true,
+      contrastWhite: 9.6,
+      contrastBlack: 2.2,
+      foundIn: "Paragraph Typography (<p>)",
+      contextSnippet: "color:var(--text-muted, #4a4a4a)",
+      suggestedUsage: "Secondary body paragraphs, descriptions, specifications"
     }
   ],
   typography: {
-    headingFont: "Plus Jakarta Sans",
-    bodyFont: "Inter",
-    googleFonts: ["Plus Jakarta Sans", "Inter"],
-    detectedCssFonts: ["Plus Jakarta Sans", "Inter", "system-ui"],
+    headingFont: "Instrument Serif",
+    bodyFont: "Work Sans",
+    googleFonts: ["Instrument Serif", "Work Sans"],
+    fontWeights: {
+      "Instrument Serif": "400 Regular, 400 Italic",
+      "Work Sans": "300 Light, 400 Regular, 500 Medium, 600 SemiBold"
+    },
+    detectedCssFonts: ["Instrument Serif", "Work Sans", "ui-sans-serif"],
     hierarchy: [
-      { level: "H1", name: "Heading 1 (Hero Title)", size: "48px / 3rem", weight: "700 Bold", lineHeight: "1.1", font: "Plus Jakarta Sans", sampleText: "Financial infrastructure for the internet" },
-      { level: "H2", name: "Heading 2 (Section Title)", size: "32px / 2rem", weight: "600 SemiBold", lineHeight: "1.25", font: "Plus Jakarta Sans", sampleText: "A fully integrated suite of payments products" },
-      { level: "H3", name: "Heading 3 (Card Title)", size: "24px / 1.5rem", weight: "600 SemiBold", lineHeight: "1.3", font: "Plus Jakarta Sans", sampleText: "Global payments made effortless" },
-      { level: "H4", name: "Heading 4 (Subheading)", size: "18px / 1.125rem", weight: "500 Medium", lineHeight: "1.4", font: "Plus Jakarta Sans", sampleText: "Fastest-improving platform" },
-      { level: "Body", name: "Body Text (Paragraphs)", size: "16px / 1rem", weight: "400 Regular", lineHeight: "1.6", font: "Inter", sampleText: "Millions of companies of all sizes use Stripe online and in person to accept payments, send payouts, and manage their businesses." },
-      { level: "Button", name: "Button / CTA Text", size: "14px / 0.875rem", weight: "600 SemiBold", lineHeight: "1.0", font: "Inter", sampleText: "START NOW �" },
-      { level: "Caption", name: "Caption / Micro Text", size: "12px / 0.75rem", weight: "400 Regular", lineHeight: "1.4", font: "Inter", sampleText: "� Stripe, Inc. CMYK calibrated." }
+      {
+        level: "H1",
+        name: "Primary Hero Title (H1)",
+        font: "Instrument Serif",
+        size: "48px – 60px (3rem – 3.75rem)",
+        weight: "700 Bold / Regular Serif",
+        sampleText: "Interiéry, které vznikají z návrhu, kvalitních materiálů a řemesla.",
+        description: "Editorial display heading setting the high-end artisan tone of the brand."
+      },
+      {
+        level: "H2",
+        name: "Section Headline (H2)",
+        font: "Instrument Serif",
+        size: "36px – 44px (2.25rem – 2.75rem)",
+        weight: "600 SemiBold / Serif",
+        sampleText: "Zakázková truhlařina",
+        description: "Major chapter title across feature sections and category portfolios."
+      },
+      {
+        level: "H3",
+        name: "Card & Feature Title (H3)",
+        font: "Instrument Serif",
+        size: "22px – 26px (1.375rem – 1.625rem)",
+        weight: "600 SemiBold",
+        sampleText: "Kuchyně na míru",
+        description: "Product categories, room types, and service steps."
+      },
+      {
+        level: "Body",
+        name: "Main Body Paragraphs",
+        font: "Work Sans",
+        size: "15px – 16px (0.9375rem – 1rem)",
+        weight: "400 Regular (Work Sans / Sans)",
+        sampleText: "Navrhujeme a vyrábíme kuchyně, vestavné skříně a pokoje na míru. Kompletní realizaci od A do Z zvládneme v rámci jednoho projektu.",
+        description: "Optimized for continuous reading, storytelling, and specifications."
+      },
+      {
+        level: "CTA",
+        name: "Call to Action / Button",
+        font: "Work Sans",
+        size: "14px (0.875rem)",
+        weight: "600 SemiBold / Uppercase",
+        sampleText: "Kontakt",
+        description: "High-contrast action triggers for customer inquiries and phone calls."
+      }
     ]
   },
-  icons: [
-    { name: "Custom Vector SVGs", type: "Vector" }
-  ],
-  tech: ["React", "Tailwind CSS"],
-  printSpecs: {}
+  copywriting: {
+    brandVoice: {
+      primaryTone: "Artisanal, High-End Craftsmanship, Reassuring & Personal",
+      attributes: [
+        "Traditional craftsmanship meets modern bespoke design",
+        "Trust-building language ('jedna firma od návrhu po zapojení')",
+        "Quality-oriented without aggressive sales pressure",
+        "Transparent step-by-step process orientation ('7 kroků')"
+      ]
+    },
+    headlineCritique: {
+      headlineText: "Interiéry, které vznikají z návrhu, kvalitních materiálů a řemesla.",
+      strengths: "Clearly articulates the triad of design, material quality, and manual craft. Establishes immediate premium positioning.",
+      opportunities: "Could incorporate an explicit customer outcome (e.g. 'domov s jedinečnou atmosférou') to increase emotional resonance."
+    },
+    valuePillars: [
+      { title: "Kompletní realizace na klíč", detail: "Jedna firma od 3D návrhu přes výrobu až po zapojení vody a elektroinstalace." },
+      { title: "Nábytek přesně na míru", detail: "Výroba atypických prvků do nestandardních prostor bez kompromisů." },
+      { title: "Transparentní proces v 7 krocích", detail: "Zákazník přesně ví, co ho čeká: od zaměření přes vizualizaci po montáž a servis." }
+    ],
+    targetAudience: {
+      persona: "Discerning Homeowners & Interior Design Clients",
+      summary: "Individuals investing in custom kitchens, built-in wardrobes, or complete living interiors in Hradec Králové and surroundings who prioritize durability, precision fit, and bespoke craftsmanship over flatpack chain stores."
+    },
+    aiAlternativeHeadings: [
+      "Nábytek, který má duši. Od návrhu po poslední šroubek.",
+      "Interiéry na míru bez kompromisů a starostí.",
+      "Truhlářské řemeslo pro váš domov v Hradci Králové a okolí.",
+      "Přesně pro váš prostor. Kuchyně a skříně z poctivého dřeva.",
+      "Jedna dílna. Jeden tým. Váš vysněný interiér na klíč."
+    ]
+  },
+  icons: [{ name: "Lucide Icons", type: "Clean SVG" }],
+  tech: ["Tailwind CSS", "React"]
 };
 
 export default function App() {
@@ -129,9 +198,24 @@ export default function App() {
   const [brandData, setBrandData] = useState(initialDemoData);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "colors" | "typography" | "print" | "ai"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "colors" | "typography" | "copywriting" | "tokens"
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showAgModal, setShowAgModal] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [showFleetModal, setShowFleetModal] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  // Load history on mount
+  useEffect(() => {
+    const saved = getSavedBrands();
+    if (saved && saved.length > 0) {
+      setHistory(saved);
+    } else {
+      // Save initial demo
+      const updated = saveBrandToHistory(initialDemoData);
+      if (updated) setHistory(updated);
+    }
+  }, []);
 
   const handleAnalyze = async (targetUrl) => {
     setIsLoading(true);
@@ -154,6 +238,10 @@ export default function App() {
       const data = await response.json();
       setBrandData(data);
       setActiveTab("overview");
+
+      // Save to history
+      const updatedHistory = saveBrandToHistory(data);
+      if (updatedHistory) setHistory(updatedHistory);
     } catch (err) {
       console.error("Analysis failed:", err);
       setError(err.message || "Failed to connect to website. Please check the URL.");
@@ -164,25 +252,26 @@ export default function App() {
 
   const tabs = [
     { id: "overview", label: "Brand Overview & Logo", icon: Sparkles },
-    { id: "colors", label: "Color Palette & CMYK", icon: Palette },
-    { id: "typography", label: "Typography & Scale", icon: Type },
-    { id: "print", label: "Commercial Fleet & Livery", icon: Truck },
-    { id: "ai", label: "AI Emulation & Tokens", icon: Bot },
+    { id: "colors", label: "Colors & Usage Context", icon: Palette },
+    { id: "typography", label: "1:1 Typography & Scale", icon: Type },
+    { id: "copywriting", label: "AI Copywriting & Messaging", icon: MessageSquare },
+    { id: "tokens", label: "AI Emulation & Tokens", icon: Bot },
   ];
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-600 selection:text-white">
-      {/* Top Navbar */}
+      {/* Navbar */}
       <Navbar
         onOpenAntigravityGuide={() => setShowAgModal(true)}
+        onOpenHistory={() => setShowHistoryDrawer(true)}
         onExportPdf={() => setShowPdfModal(true)}
         hasData={!!brandData}
         brandName={brandData?.brandName}
+        savedCount={history.length}
       />
 
-      {/* Main Content Area */}
+      {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* URL Input Bar */}
         <UrlInputBar
           url={url}
           setUrl={setUrl}
@@ -191,10 +280,8 @@ export default function App() {
           error={error}
         />
 
-        {/* Loading Progress */}
         {isLoading && <AnalysisLoading />}
 
-        {/* Active Brand Kit Workspace */}
         {!isLoading && brandData && (
           <div className="mt-8 space-y-6">
             {/* Tab Navigation */}
@@ -222,7 +309,11 @@ export default function App() {
             {/* Tab Panels */}
             <div className="pt-4">
               {activeTab === "overview" && (
-                <OverviewTab brandData={brandData} setBrandData={setBrandData} />
+                <OverviewTab 
+                  brandData={brandData} 
+                  setBrandData={setBrandData}
+                  onOpenFleetModal={() => setShowFleetModal(true)}
+                />
               )}
               {activeTab === "colors" && (
                 <ColorsTab brandData={brandData} setBrandData={setBrandData} />
@@ -230,10 +321,10 @@ export default function App() {
               {activeTab === "typography" && (
                 <TypographyTab brandData={brandData} setBrandData={setBrandData} />
               )}
-              {activeTab === "print" && (
-                <PrintTruckTab brandData={brandData} />
+              {activeTab === "copywriting" && (
+                <AiCopywritingTab brandData={brandData} setBrandData={setBrandData} />
               )}
-              {activeTab === "ai" && (
+              {activeTab === "tokens" && (
                 <AiEmulationTab brandData={brandData} />
               )}
             </div>
@@ -241,10 +332,9 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-slate-900 py-6 mt-16 text-center text-xs text-slate-500">
         <p>
-          BrandKit Studio &bull; Zero Paid API Scraper &bull; Designed for Vehicles, Print & Web Emulation
+          BrandKit Studio &bull; Accurate 1:1 Typography &bull; Color Context Engine &bull; AI Copywriting
         </p>
       </footer>
 
@@ -259,6 +349,26 @@ export default function App() {
       {showAgModal && (
         <AntigravityGuideModal
           onClose={() => setShowAgModal(false)}
+        />
+      )}
+
+      {showHistoryDrawer && (
+        <HistoryDrawer
+          isOpen={showHistoryDrawer}
+          onClose={() => setShowHistoryDrawer(false)}
+          history={history}
+          setHistory={setHistory}
+          onSelectBrand={(selected) => {
+            setBrandData(selected);
+            setActiveTab("overview");
+          }}
+        />
+      )}
+
+      {showFleetModal && brandData && (
+        <FleetModal
+          brandData={brandData}
+          onClose={() => setShowFleetModal(false)}
         />
       )}
     </div>

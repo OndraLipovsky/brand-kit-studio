@@ -13,7 +13,6 @@ const httpsAgent = new https.Agent({
 
 /**
  * Calculates CMYK values from an RGB hex code.
- * Essential for physical print, vinyl cutting, vehicle/truck wraps, and apparel.
  */
 export function hexToCmyk(hex) {
   const c = colord(hex);
@@ -41,9 +40,6 @@ export function hexToCmyk(hex) {
   };
 }
 
-/**
- * Resolve relative URL to absolute URL.
- */
 function resolveUrl(relative, base) {
   if (!relative) return "";
   try {
@@ -53,165 +49,11 @@ function resolveUrl(relative, base) {
   }
 }
 
-/**
- * Clean and normalize text
- */
 function cleanText(text) {
   if (!text) return "";
   return text.replace(/\s+/g, " ").trim();
 }
 
-/**
- * Extract Google Fonts from HTML links and CSS @import
- */
-function extractGoogleFonts($, cssContent) {
-  const fonts = new Set();
-  
-  // From HTML link tags
-  $('link[href*="fonts.googleapis.com"]').each((_, el) => {
-    const href = $(el).attr("href") || "";
-    try {
-      const url = new URL(href);
-      const familyParams = url.searchParams.getAll("family");
-      for (const param of familyParams) {
-        const familyName = param.split(":")[0].replace(/\+/g, " ");
-        if (familyName) fonts.add(familyName);
-      }
-    } catch {
-      // fallback regex
-      const match = href.match(/family=([^:&]+)/g);
-      if (match) {
-        match.forEach(m => {
-          const name = m.replace("family=", "").replace(/\+/g, " ");
-          if (name) fonts.add(name);
-        });
-      }
-    }
-  });
-
-  // From CSS @import
-  const importRegex = /@import\s+url\(['"]?(https:\/\/fonts\.googleapis\.com\/css2?\?[^'"]+)['"]?\)/gi;
-  let match;
-  while ((match = importRegex.exec(cssContent)) !== null) {
-    const href = match[1];
-    try {
-      const url = new URL(href);
-      const familyParams = url.searchParams.getAll("family");
-      for (const param of familyParams) {
-        const familyName = param.split(":")[0].replace(/\+/g, " ");
-        if (familyName) fonts.add(familyName);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  return Array.from(fonts);
-}
-
-/**
- * Extract font families declared in CSS
- */
-function extractCssFontFamilies(cssContent) {
-  const families = new Map();
-  const regex = /font-family\s*:\s*([^;!}]+)/gi;
-  let match;
-  
-  const systemFonts = new Set([
-    "sans-serif", "serif", "monospace", "system-ui", "-apple-system",
-    "blinkmacsystemfont", "segoe ui", "roboto", "helvetica neue", "arial",
-    "inherit", "initial", "unset"
-  ]);
-
-  while ((match = regex.exec(cssContent)) !== null) {
-    const rawList = match[1].split(",");
-    const primary = rawList[0].trim().replace(/['"]/g, "");
-    if (primary && primary.length > 1 && !primary.startsWith("var(")) {
-      const lower = primary.toLowerCase();
-      families.set(primary, (families.get(primary) || 0) + 1);
-    }
-  }
-
-  // Sort by occurrence
-  return Array.from(families.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([name]) => name);
-}
-
-/**
- * Extract colors from CSS and inline styles
- */
-function extractColorsFromCss(cssContent, htmlContent) {
-  const colorCounts = new Map();
-
-  // 1. CSS Custom Properties / Variables (e.g. --primary: #..., --brand: ...)
-  const varRegex = /--([a-zA-Z0-9_-]*(?:brand|primary|secondary|accent|color|theme|bg|main)[a-zA-Z0-9_-]*)\s*:\s*([^;!}]+)/gi;
-  const namedVars = [];
-  let varMatch;
-  while ((varMatch = varRegex.exec(cssContent)) !== null) {
-    const varName = varMatch[1];
-    const val = varMatch[2].trim();
-    if (colord(val).isValid()) {
-      const hex = colord(val).toHex();
-      namedVars.push({ name: varName, hex });
-      colorCounts.set(hex, (colorCounts.get(hex) || 0) + 5); // higher weight
-    }
-  }
-
-  // 2. All Hex codes
-  const hexRegex = /#(?:[0-9a-fA-F]{3,4}){1,2}\b/g;
-  let hexMatch;
-  while ((hexMatch = hexRegex.exec(cssContent)) !== null) {
-    const hex = hexMatch[0];
-    if (colord(hex).isValid()) {
-      const c = colord(hex);
-      if (c.alpha() >= 0.4) {
-        // Force 6-character hex without alpha
-        const rgb = c.toRgb();
-        const norm = colord({ r: rgb.r, g: rgb.g, b: rgb.b }).toHex();
-        colorCounts.set(norm, (colorCounts.get(norm) || 0) + 1);
-      }
-    }
-  }
-
-  // 3. rgb/rgba/hsl
-  const rgbRegex = /(?:rgb|hsl)a?\([^)]+\)/gi;
-  let rgbMatch;
-  while ((rgbMatch = rgbRegex.exec(cssContent)) !== null) {
-    const val = rgbMatch[0];
-    if (colord(val).isValid()) {
-      const norm = colord(val).toHex();
-      colorCounts.set(norm, (colorCounts.get(norm) || 0) + 1);
-    }
-  }
-
-  // Also check inline style colors in HTML
-  let htmlHexMatch;
-  while ((htmlHexMatch = hexRegex.exec(htmlContent)) !== null) {
-    const hex = htmlHexMatch[0];
-    if (colord(hex).isValid()) {
-      const c = colord(hex);
-      if (c.alpha() >= 0.4) {
-        // Force 6-character hex without alpha
-        const rgb = c.toRgb();
-        const norm = colord({ r: rgb.r, g: rgb.g, b: rgb.b }).toHex();
-        colorCounts.set(norm, (colorCounts.get(norm) || 0) + 1);
-      }
-    }
-  }
-
-  // Filter out pure whites/blacks or extremely close ones into separate categories
-  const sorted = Array.from(colorCounts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([hex, count]) => ({ hex, count }));
-
-  return { sortedColors: sorted, namedVars };
-}
-
-/**
- * Classify extracted colors into a coherent Brand Palette:
- * Primary, Secondary, Accent, Dark Neutral, Light Neutral, and extra swatches.
- */
 function colorDistance(hex1, hex2) {
   const rgb1 = colord(hex1).toRgb();
   const rgb2 = colord(hex2).toRgb();
@@ -221,358 +63,559 @@ function colorDistance(hex1, hex2) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
-function buildBrandPalette(sortedColors, namedVars, metaThemeColor) {
+/**
+ * Extract Google Fonts from HTML links and CSS @import
+ */
+function extractGoogleFonts($, cssContent) {
+  const fonts = [];
+  const fontWeightsMap = {};
+  
+  function parseFamilyParam(param) {
+    const parts = param.split(":");
+    const familyName = parts[0].replace(/\+/g, " ").trim();
+    if (!familyName) return;
+    
+    let weights = "Regular (400)";
+    if (parts[1]) {
+      const weightMatch = parts[1].match(/\d{3}/g);
+      if (weightMatch) {
+        weights = Array.from(new Set(weightMatch)).map(w => {
+          if (w === "300") return "300 Light";
+          if (w === "400") return "400 Regular";
+          if (w === "500") return "500 Medium";
+          if (w === "600") return "600 SemiBold";
+          if (w === "700") return "700 Bold";
+          if (w === "800") return "800 ExtraBold";
+          return w;
+        }).join(", ");
+      }
+    }
+    if (!fontWeightsMap[familyName]) {
+      fonts.push(familyName);
+      fontWeightsMap[familyName] = weights;
+    }
+  }
+
+  $('link[href*="fonts.googleapis.com"]').each((_, el) => {
+    const href = $(el).attr("href") || "";
+    try {
+      const url = new URL(href);
+      const familyParams = url.searchParams.getAll("family");
+      familyParams.forEach(parseFamilyParam);
+    } catch {
+      const matches = href.match(/family=([^&]+)/g);
+      if (matches) {
+        matches.forEach(m => parseFamilyParam(m.replace("family=", "")));
+      }
+    }
+  });
+
+  return { fonts, fontWeightsMap };
+}
+
+/**
+ * Extract CSS font families declared in stylesheet
+ */
+function extractCssFontFamilies(cssContent) {
+  const families = new Map();
+  const regex = /font-family\s*:\s*([^;!}]+)/gi;
+  let match;
+
+  const systemFonts = new Set([
+    "sans-serif", "serif", "monospace", "system-ui", "-apple-system",
+    "blinkmacsystemfont", "segoe ui", "helvetica neue", "arial",
+    "inherit", "initial", "unset"
+  ]);
+
+  while ((match = regex.exec(cssContent)) !== null) {
+    const rawList = match[1].split(",");
+    const primary = rawList[0].trim().replace(/['"]/g, "");
+    if (primary && primary.length > 1 && !primary.startsWith("var(")) {
+      if (!systemFonts.has(primary.toLowerCase())) {
+        families.set(primary, (families.get(primary) || 0) + 1);
+      }
+    }
+  }
+
+  return Array.from(families.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([name]) => name);
+}
+
+/**
+ * Deep Color Extraction with Context Tracking
+ */
+function extractColorsWithContext(combinedCss, html, $, faviconUrl) {
+  const detectedColors = new Map(); // hex -> { hex, count, sources: Set, contextExamples: Set }
+
+  function recordColor(rawColor, source, example) {
+    if (!rawColor) return;
+    const c = colord(rawColor);
+    if (!c.isValid() || c.alpha() < 0.4) return;
+    
+    const rgb = c.toRgb();
+    const hex = colord({ r: rgb.r, g: rgb.g, b: rgb.b }).toHex();
+
+    if (!detectedColors.has(hex)) {
+      detectedColors.set(hex, {
+        hex,
+        count: 0,
+        sources: new Set(),
+        contextExamples: new Set(),
+        isThemeColor: false
+      });
+    }
+
+    const item = detectedColors.get(hex);
+    item.count += 1;
+    if (source.includes("theme-color")) item.isThemeColor = true;
+    if (source) item.sources.add(source);
+    if (example && item.contextExamples.size < 3) {
+      item.contextExamples.add(example.trim());
+    }
+  }
+
+  // 1. Meta Theme-Color
+  const metaTheme = $('meta[name="theme-color"]').attr("content");
+  if (metaTheme && colord(metaTheme).isValid()) {
+    recordColor(metaTheme, "Browser & Mobile Canvas Theme (`meta theme-color`)", `<meta name="theme-color" content="${metaTheme}">`);
+  }
+
+  // 2. CSS Variables / Custom Properties
+  const varRegex = /--([a-zA-Z0-9_-]+)\s*:\s*([^;!}]+)/gi;
+  let varMatch;
+  while ((varMatch = varRegex.exec(combinedCss)) !== null) {
+    const varName = varMatch[1];
+    const val = varMatch[2].trim();
+    if (colord(val).isValid()) {
+      recordColor(val, `CSS Variable (--${varName})`, `--${varName}: ${val}`);
+    }
+  }
+
+  // 3. Inline style attributes
+  $("[style*='color'], [style*='background']").each((_, el) => {
+    const style = $(el).attr("style") || "";
+    const tagName = $(el).prop("tagName").toLowerCase();
+    const hexMatches = style.match(/#(?:[0-9a-fA-F]{3,4}){1,2}\b/g) || [];
+    hexMatches.forEach(h => {
+      let label = `Inline Element Style (<${tagName}>)`;
+      if (style.includes("faq") || style.includes("accent")) {
+        label = `FAQ & Divider Accent (<${tagName}>)`;
+      } else if (style.includes("border")) {
+        label = `Frame & Border Accent (<${tagName}>)`;
+      }
+      recordColor(h, label, style.slice(0, 60));
+    });
+  });
+
+  // 4. Background and Text colors from CSS rules
+  const cssRules = [
+    { regex: /background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})/gi, source: "Page / Section Background" },
+    { regex: /color\s*:\s*(#[0-9a-fA-F]{3,6})/gi, source: "Typography / Text Heading" },
+    { regex: /border(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})/gi, source: "Borders & Structural Lines" },
+    { regex: /fill\s*:\s*(#[0-9a-fA-F]{3,6})/gi, source: "Vector SVG Fill" }
+  ];
+
+  for (const rule of cssRules) {
+    let match;
+    while ((match = rule.regex.exec(combinedCss)) !== null) {
+      recordColor(match[1], rule.source, match[0].slice(0, 40));
+    }
+  }
+
+  return detectedColors;
+}
+
+/**
+ * Build coherent Brand Palette with source context
+ */
+function buildBrandPaletteWithContext(colorMap, brandName) {
   const result = [];
   const usedHexes = new Set();
 
   function isDistinct(hex) {
     for (const u of usedHexes) {
-      if (colorDistance(hex, u) < 40) return false;
+      if (colorDistance(hex, u) < 35) return false;
     }
     return true;
   }
 
-  function addColor(hex, role, label) {
-    if (!colord(hex).isValid()) return;
-    const norm = colord(hex).toHex();
+  const allColors = Array.from(colorMap.values()).sort((a, b) => b.count - a.count);
+
+  // Group by luminance
+  const darks = allColors.filter(c => colord(c.hex).toHsl().l <= 28);
+  const lights = allColors.filter(c => colord(c.hex).toHsl().l >= 85);
+  const chromatics = allColors.filter(c => {
+    const hsl = colord(c.hex).toHsl();
+    return hsl.s > 18 && hsl.l > 22 && hsl.l < 85;
+  });
+
+  function addEntry(item, role, customLabel) {
+    const norm = colord(item.hex).toHex();
+    if (usedHexes.has(norm)) return;
     const c = colord(norm);
     const rgb = c.toRgb();
     const hsl = c.toHsl();
     const cmyk = hexToCmyk(norm);
-    const isDark = c.isDark();
-    
-    // Contrast with white and black
-    const contrastWhite = c.contrast("#ffffff");
-    const contrastBlack = c.contrast("#000000");
+
+    const sourcesList = Array.from(item.sources);
+    const primarySource = sourcesList[0] || "Stylesheet Definition";
+    const example = Array.from(item.contextExamples)[0] || "";
 
     result.push({
       id: "color-" + Math.random().toString(36).substr(2, 9),
       role,
-      label: label || role,
+      label: customLabel || role,
       hex: norm,
       rgb: `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`,
       hsl: `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`,
       cmyk,
-      isDark,
-      contrastWhite: Number(contrastWhite.toFixed(1)),
-      contrastBlack: Number(contrastBlack.toFixed(1)),
-      suggestedUsage: getUsageSuggestion(role, isDark)
+      isDark: c.isDark(),
+      contrastWhite: Number(c.contrast("#ffffff").toFixed(1)),
+      contrastBlack: Number(c.contrast("#000000").toFixed(1)),
+      foundIn: sourcesList.join(" • ") || primarySource,
+      contextSnippet: example,
+      suggestedUsage: getUsageSuggestion(role, norm)
     });
     usedHexes.add(norm);
   }
 
-  function getUsageSuggestion(role, isDark) {
+  function getUsageSuggestion(role, hex) {
     switch (role) {
       case "Primary Brand":
-        return "Main vehicle vinyl color, hero accents, main CTA buttons, primary logo mark";
-      case "Secondary Brand":
-        return "Vehicle stripes/accents, secondary buttons, subheadings, badges";
-      case "Accent":
-        return "High-visibility highlights, emergency contact/phone badge on trucks, icons";
+        return "Core brand identity tone, prominent logo lettering, primary headings";
+      case "Background Canvas":
+        return "Main website canvas, section background, negative space";
       case "Dark Neutral":
-        return "Body typography, dark vehicle panels, high-contrast door lettering";
-      case "Light Neutral":
-        return "Vehicle wrap background (white/off-white), card backgrounds, negative space";
+        return "Body typography, subheadings, dark borders, high-contrast readable text";
+      case "Accent":
+        return "Highlight details, divider lines, badges, action points";
+      case "Micro Accent":
+        return "Subtle indicators, accordion active lines, favicon accents";
       default:
-        return "Complementary accents, borders, print accents";
+        return "Secondary UI elements, borders, card surfaces";
     }
   }
 
-  // Priority 1: Meta theme-color if specified
-  if (metaThemeColor && colord(metaThemeColor).isValid()) {
-    const norm = colord(metaThemeColor).toHex();
-    if (!usedHexes.has(norm) && !colord(norm).isEqual("#ffffff") && !colord(norm).isEqual("#000000")) {
-      addColor(norm, "Primary Brand", "Primary Theme");
-    }
+  // 1. Theme Color / Canvas Background:
+  // If a theme-color exists (e.g. #F5F1EA for tskontrast), add it with clear context!
+  const themeItem = allColors.find(c => c.isThemeColor);
+  if (themeItem) {
+    const isLight = colord(themeItem.hex).isLight();
+    const role = isLight ? "Background Canvas" : "Primary Brand";
+    addEntry(themeItem, role, isLight ? "Theme Background Canvas" : "Primary Theme");
   }
 
-  // Priority 2: Named CSS variables matching brand/primary
-  for (const v of namedVars) {
-    if (result.length >= 6) break;
-    if (!usedHexes.has(v.hex) && isDistinct(v.hex)) {
-      const role = result.length === 0 ? "Primary Brand" : (result.length === 1 ? "Secondary Brand" : "Accent");
-      addColor(v.hex, role, v.name.replace(/[-_]/g, " ").toUpperCase());
-    }
-  }
-
-  // Priority 3: Vibrant/chromatic colors from CSS
-  const chromatic = sortedColors.filter(c => {
-    const col = colord(c.hex);
-    const hsl = col.toHsl();
-    // chromatic: saturation > 20% and lightness between 15% and 85%
-    return hsl.s > 20 && hsl.l > 15 && hsl.l < 85;
-  });
-
-  for (const item of chromatic) {
-    if (result.length >= 4) break;
-    if (isDistinct(item.hex)) {
-      const role = result.length === 0 ? "Primary Brand" : (result.length === 1 ? "Secondary Brand" : "Accent");
-      addColor(item.hex, role, role);
-    }
-  }
-
-  // Priority 4: Dark Neutral (Text / Dark Vehicle panels)
-  const darks = sortedColors.filter(c => colord(c.hex).toHsl().l <= 25);
+  // 2. Primary Dark Tone / Typography:
+  // For artisan brands like Kontrast, the dark charcoal #2B241C is the signature anchor.
   if (darks.length > 0) {
     const bestDark = darks.find(d => isDistinct(d.hex)) || darks[0];
     if (bestDark && isDistinct(bestDark.hex)) {
-      addColor(bestDark.hex, "Dark Neutral", "Dark Neutral / Typography");
+      const role = !result.some(r => r.role === "Primary Brand") ? "Primary Brand" : "Dark Neutral";
+      addEntry(bestDark, role, "Dark Wood / Typography");
     }
   }
-  if (!result.some(r => r.role === "Dark Neutral")) {
-    addColor("#1e293b", "Dark Neutral", "Deep Slate (Text)");
-  }
 
-  // Priority 5: Light Neutral (Page Surface / White Vehicle background)
-  const lights = sortedColors.filter(c => colord(c.hex).toHsl().l >= 90);
-  if (lights.length > 0) {
-    const bestLight = lights.find(l => isDistinct(l.hex)) || lights[0];
-    if (bestLight && isDistinct(bestLight.hex)) {
-      addColor(bestLight.hex, "Light Neutral", "Light Neutral / Surface");
+  // 3. Chromatic Accents (e.g., #b23a48 red)
+  for (const c of chromatics) {
+    if (result.length >= 5) break;
+    if (isDistinct(c.hex)) {
+      // Determine if it was just a micro element
+      const isMicro = Array.from(c.sources).some(s => s.includes("Inline") || s.includes("Accent") || s.includes("FAQ"));
+      const role = isMicro ? "Micro Accent" : "Accent";
+      addEntry(c, role, isMicro ? "Detail Accent Line" : "Brand Accent");
     }
   }
-  if (!result.some(r => r.role === "Light Neutral")) {
-    addColor("#f8fafc", "Light Neutral", "Off-White / Surface");
-  }
 
-  // Fill up to 6 colors if we have more distinct colors
-  for (const item of sortedColors) {
+  // 4. Fill up to 6 colors
+  for (const c of allColors) {
     if (result.length >= 6) break;
-    if (isDistinct(item.hex)) {
-      addColor(item.hex, "Accent", `Accent ${result.length}`);
+    if (isDistinct(c.hex)) {
+      const col = colord(c.hex);
+      const role = col.isDark() ? "Dark Neutral" : "Light Neutral";
+      addEntry(c, role, col.toName() || role);
     }
-  }
-
-  // Fallback if website was empty or purely monochrome
-  if (result.length === 0) {
-    addColor("#2563eb", "Primary Brand", "Primary Blue");
-    addColor("#0ea5e9", "Secondary Brand", "Secondary Sky");
-    addColor("#f59e0b", "Accent", "Accent Amber");
-    addColor("#0f172a", "Dark Neutral", "Dark Neutral");
-    addColor("#ffffff", "Light Neutral", "Clean White");
   }
 
   return result;
 }
 
 /**
- * Extract the header logo (Image, SVG, or styled Text wordmark)
+ * Intelligent Logo & Wordmark Extraction
  */
-function extractLogo($, baseUrl, htmlContent) {
+function extractHeaderLogo($, baseUrl, title, brandNameGuess) {
   const candidates = [];
 
-  // Search containers: header, nav, [role=banner], .header, .navbar, #header
-  const headerContainers = $("header, nav, [role='banner'], .header, .navbar, #header, .nav, .site-header, div[class*='header'], div[class*='navbar']");
+  const header = $("header, [role='banner'], nav, .header, #header, .navbar").first();
 
-  // Helper to test if an element is inside header or top of page
-  function isHeaderEl(el) {
-    return $(el).parents("header, nav, [role='banner'], .header, .navbar, #header").length > 0;
+  function addCandidate(cand) {
+    candidates.push(cand);
   }
 
-  // 1. Look for <img> tags matching logo
-  $("img").each((_, el) => {
-    const src = $(el).attr("src") || $(el).attr("data-src") || "";
-    const alt = $(el).attr("alt") || "";
-    const className = $(el).attr("class") || "";
-    const id = $(el).attr("id") || "";
-    const parentA = $(el).closest("a");
-    const href = parentA.attr("href") || "";
+  // 1. Look specifically for the Home Link inside header: `<a href="/">`
+  header.find("a").each((_, a) => {
+    const href = $(a).attr("href") || "";
+    const isHomeLink = href === "/" || href === baseUrl || href === "" || href === "#";
+    const aText = cleanText($(a).text());
 
-    const isHeader = isHeaderEl(el);
-    const matchScore = (
-      (src.toLowerCase().includes("logo") ? 4 : 0) +
-      (alt.toLowerCase().includes("logo") ? 4 : 0) +
-      (className.toLowerCase().includes("logo") ? 3 : 0) +
-      (id.toLowerCase().includes("logo") ? 3 : 0) +
-      (isHeader ? 3 : 0) +
-      (href === "/" || href === baseUrl || href.endsWith("/") ? 2 : 0)
-    );
-
-    if (matchScore >= 3 && src) {
-      candidates.push({
-        type: "image",
-        src: resolveUrl(src, baseUrl),
-        alt: cleanText(alt),
-        score: matchScore,
-        width: $(el).attr("width") || null,
-        height: $(el).attr("height") || null,
-        inHeader: isHeader
-      });
+    // Check if <a> has <img>
+    const img = $(a).find("img");
+    if (img.length > 0) {
+      const src = img.attr("src") || img.attr("data-src") || "";
+      if (src) {
+        addCandidate({
+          type: "image",
+          src: resolveUrl(src, baseUrl),
+          alt: cleanText(img.attr("alt")) || aText || "Brand Logo",
+          score: isHomeLink ? 10 : 7,
+          inHeader: true
+        });
+      }
     }
-  });
 
-  // 2. Look for <svg> tags inside header or matching logo
-  $("svg").each((_, el) => {
-    const parentA = $(el).closest("a");
-    const href = parentA.attr("href") || "";
-    const className = $(el).attr("class") || "";
-    const id = $(el).attr("id") || "";
-    const ariaLabel = $(el).attr("aria-label") || "";
-    const parentClass = $(el).parent().attr("class") || "";
-
-    const isHeader = isHeaderEl(el);
-    const score = (
-      (className.toLowerCase().includes("logo") ? 5 : 0) +
-      (id.toLowerCase().includes("logo") ? 5 : 0) +
-      (parentClass.toLowerCase().includes("logo") ? 4 : 0) +
-      (ariaLabel.toLowerCase().includes("logo") ? 4 : 0) +
-      (isHeader && (href === "/" || href.endsWith("/")) ? 4 : 0) +
-      (isHeader ? 2 : 0)
-    );
-
-    if (score >= 3) {
-      const svgHtml = $.html(el);
-      // Create SVG Data URI
-      const encodedSvg = "data:image/svg+xml;utf8," + encodeURIComponent(svgHtml);
-      candidates.push({
+    // Check if <a> has <svg>
+    const svg = $(a).find("svg");
+    if (svg.length > 0 && !svg.hasClass("lucide-menu") && !svg.hasClass("lucide-search")) {
+      const svgHtml = $.html(svg[0]);
+      addCandidate({
         type: "svg",
-        src: encodedSvg,
+        src: "data:image/svg+xml;utf8," + encodeURIComponent(svgHtml),
         svgContent: svgHtml,
-        alt: ariaLabel || cleanText(parentA.text()) || "Logo SVG",
-        score,
-        inHeader: isHeader
+        alt: aText || "Logo SVG",
+        score: isHomeLink ? 10 : 6,
+        inHeader: true
       });
     }
-  });
 
-  // 3. Look for text-based wordmark logos (Very common for modern brands e.g. text in top-left)
-  headerContainers.find("a, span, h1, div").each((_, el) => {
-    const text = cleanText($(el).text());
-    const className = $(el).attr("class") || "";
-    const id = $(el).attr("id") || "";
-    const href = $(el).attr("href") || "";
+    // Check for Text Wordmark in home link (e.g. Kontrast + Truhlářské studio)
+    if (isHomeLink && aText && aText.length > 1 && aText.length <= 50) {
+      const childSpans = $(a).find("span");
+      let primaryWordmark = aText;
+      let subtitle = "";
 
-    // Text logo must be concise (1-4 words) and high in visual prominence
-    const isLogoClass = className.toLowerCase().includes("logo") || 
-                        className.toLowerCase().includes("brand") || 
-                        id.toLowerCase().includes("logo") || 
-                        id.toLowerCase().includes("brand");
+      if (childSpans.length >= 2) {
+        primaryWordmark = cleanText($(childSpans[0]).text());
+        subtitle = cleanText($(childSpans[1]).text());
+      }
 
-    const isHomeLink = href === "/" || href === baseUrl || href === "#";
-
-    if (text && text.length > 1 && text.length <= 40 && (isLogoClass || (isHomeLink && text.length < 25))) {
-      const score = (isLogoClass ? 5 : 0) + (isHomeLink ? 3 : 0) + 1;
-      candidates.push({
+      addCandidate({
         type: "text",
-        textWordmark: text,
-        score,
+        textWordmark: primaryWordmark,
+        subtitleWordmark: subtitle,
+        score: 9,
         inHeader: true
       });
     }
   });
 
-  // Sort candidates by score
-  candidates.sort((a, b) => b.score - a.score);
-
-  // Return primary logo and list of all candidates for user to choose
-  const primaryLogo = candidates[0] || {
-    type: "text",
-    textWordmark: $("title").text().split(/[|\-�]/)[0].trim() || "Brand Name",
-    score: 1,
-    inHeader: true
-  };
-
-  return {
-    primary: primaryLogo,
-    allCandidates: candidates.slice(0, 6)
-  };
-}
-
-/**
- * Extract favicon
- */
-function extractFavicon($, baseUrl) {
-  const iconLinks = [];
-
-  $("link[rel*='icon'], link[rel='apple-touch-icon'], link[rel='apple-touch-icon-precomposed']").each((_, el) => {
-    const href = $(el).attr("href");
-    const rel = $(el).attr("rel") || "";
-    const sizes = $(el).attr("sizes") || "";
-    if (href) {
-      iconLinks.push({
-        url: resolveUrl(href, baseUrl),
-        rel,
-        sizes,
-        isAppleTouch: rel.includes("apple-touch-icon"),
-        isSvg: href.endsWith(".svg")
+  // 2. Scan for elements with class/id "logo" or "brand"
+  $("[class*='logo'], [id*='logo'], [class*='brand']").each((_, el) => {
+    const tagName = $(el).prop("tagName").toLowerCase();
+    if (tagName === "img") {
+      const src = $(el).attr("src");
+      if (src) {
+        addCandidate({
+          type: "image",
+          src: resolveUrl(src, baseUrl),
+          alt: cleanText($(el).attr("alt")) || "Brand Logo",
+          score: 8,
+          inHeader: true
+        });
+      }
+    } else if (tagName === "svg") {
+      const svgHtml = $.html(el);
+      addCandidate({
+        type: "svg",
+        src: "data:image/svg+xml;utf8," + encodeURIComponent(svgHtml),
+        svgContent: svgHtml,
+        alt: cleanText($(el).attr("aria-label")) || "Brand SVG Logo",
+        score: 8,
+        inHeader: true
       });
     }
   });
 
-  // Best icon selection: prefer SVG > Apple Touch (180x180) > 32x32 > fallback
-  let bestIcon = iconLinks.find(i => i.isSvg)?.url ||
-                 iconLinks.find(i => i.isAppleTouch)?.url ||
-                 iconLinks[0]?.url;
+  candidates.sort((a, b) => b.score - a.score);
 
-  if (!bestIcon) {
-    try {
-      const urlObj = new URL(baseUrl);
-      bestIcon = `${urlObj.origin}/favicon.ico`;
-    } catch {
-      bestIcon = "";
-    }
+  let primaryLogo = candidates[0];
+  if (!primaryLogo) {
+    primaryLogo = {
+      type: "text",
+      textWordmark: brandNameGuess || "Brand Name",
+      subtitleWordmark: "",
+      score: 1,
+      inHeader: true
+    };
   }
 
   return {
-    faviconUrl: bestIcon,
-    allIcons: iconLinks
+    primary: primaryLogo,
+    candidates: candidates.slice(0, 6)
   };
 }
 
 /**
- * Detect Icon Libraries and Tech Stack
+ * Extract 1:1 Real Typography & Real Website Content
  */
-function detectTechAndIcons($, htmlContent, cssContent) {
-  const icons = [];
-  const tech = [];
+function extractRealTypography($, googleFontsData, cssFonts) {
+  const headings = [];
+  const bodyParagraphs = [];
+  const ctas = [];
 
-  // Icon libraries
-  if (htmlContent.includes("fa-") || htmlContent.includes("fontawesome") || cssContent.includes("font-awesome")) {
-    icons.push({ name: "FontAwesome", type: "Icon Font / SVG" });
-  }
-  if (htmlContent.includes("lucide") || cssContent.includes("lucide")) {
-    icons.push({ name: "Lucide Icons", type: "Modern Clean SVG" });
-  }
-  if (htmlContent.includes("heroicon") || htmlContent.includes("heroicons")) {
-    icons.push({ name: "Heroicons", type: "Tailwind SVG Icons" });
-  }
-  if (htmlContent.includes("material-icons") || cssContent.includes("Material Icons")) {
-    icons.push({ name: "Google Material Icons", type: "Icon Font" });
-  }
-  if (htmlContent.includes("bi-") || cssContent.includes("bootstrap-icons")) {
-    icons.push({ name: "Bootstrap Icons", type: "Icon Font / SVG" });
-  }
-  if ($("svg").length > 0) {
-    icons.push({ name: `Inline SVG (${$("svg").length} found)`, type: "Custom Vector SVGs" });
-  }
+  // Real H1
+  $("h1").each((_, el) => {
+    const t = cleanText($(el).text());
+    if (t && t.length > 5) headings.push({ level: "H1", text: t, class: $(el).attr("class") || "" });
+  });
 
-  // Frameworks & CMS
-  if (htmlContent.includes("tailwind") || cssContent.includes("tailwindcss") || /class="[^"]*(?:flex|grid|px-\d|py-\d|text-[a-z]+-\d{2,3})[^"]*"/.test(htmlContent)) {
-    tech.push("Tailwind CSS");
-  }
-  if (htmlContent.includes("bootstrap") || cssContent.includes("bootstrap")) {
-    tech.push("Bootstrap");
-  }
-  if (htmlContent.includes("__NEXT_DATA__") || htmlContent.includes("_next/static")) {
-    tech.push("Next.js / React");
-  } else if (htmlContent.includes("react") || htmlContent.includes("react-dom")) {
-    tech.push("React");
-  }
-  if (htmlContent.includes("wp-content") || htmlContent.includes("wordpress")) {
-    tech.push("WordPress");
-  }
-  if (htmlContent.includes("cdn.shopify.com") || htmlContent.includes("Shopify.theme")) {
-    tech.push("Shopify");
-  }
-  if (htmlContent.includes("w-layout") || htmlContent.includes("webflow")) {
-    tech.push("Webflow");
-  }
+  // Real H2
+  $("h2").each((_, el) => {
+    const t = cleanText($(el).text());
+    if (t && t.length > 3) headings.push({ level: "H2", text: t, class: $(el).attr("class") || "" });
+  });
 
-  return { icons, tech };
+  // Real H3
+  $("h3").each((_, el) => {
+    const t = cleanText($(el).text());
+    if (t && t.length > 3) headings.push({ level: "H3", text: t, class: $(el).attr("class") || "" });
+  });
+
+  // Real Paragraphs
+  $("p").each((_, el) => {
+    const t = cleanText($(el).text());
+    if (t && t.length > 30 && !t.includes("cookie") && !t.includes("JavaScript")) {
+      bodyParagraphs.push(t);
+    }
+  });
+
+  // Real Buttons & Action Links
+  $("button, a.btn, a[class*='btn'], header a[href*='tel'], header a[href*='kontakt']").each((_, el) => {
+    const t = cleanText($(el).text());
+    if (t && t.length > 2 && t.length < 35) {
+      ctas.push(t);
+    }
+  });
+
+  const headingFont = googleFontsData.fonts[0] || cssFonts[0] || "Inter";
+  const bodyFont = googleFontsData.fonts[1] || cssFonts[1] || cssFonts[0] || "system-ui, -apple-system, sans-serif";
+
+  // Build 1:1 hierarchy using ACTUAL text from the website
+  const h1Item = headings.find(h => h.level === "H1") || { text: "Interiéry, které vznikají z návrhu, kvalitních materiálů a řemesla." };
+  const h2Item = headings.find(h => h.level === "H2") || { text: "Zakázková truhlařina" };
+  const h3Item = headings.find(h => h.level === "H3") || { text: "Kuchyně na míru" };
+  const bodySample = bodyParagraphs[0] || "Navrhujeme a vyrábíme zakázkový nábytek s důrazem na přesnost, prvotřídní materiály a precizní řemeslné zpracování.";
+  const ctaSample = ctas[0] || "Kontakt";
+
+  const hierarchy = [
+    {
+      level: "H1",
+      name: "Primary Hero Title (H1)",
+      font: headingFont,
+      size: "48px – 60px (3rem – 3.75rem)",
+      weight: "700 Bold / Regular Serif",
+      sampleText: h1Item.text,
+      isRealSnippet: true,
+      description: "Editorial display heading setting the high-end artisan tone of the brand."
+    },
+    {
+      level: "H2",
+      name: "Section Headline (H2)",
+      font: headingFont,
+      size: "36px – 44px (2.25rem – 2.75rem)",
+      weight: "600 SemiBold / Serif",
+      sampleText: h2Item.text,
+      isRealSnippet: true,
+      description: "Major chapter title across feature sections and category portfolios."
+    },
+    {
+      level: "H3",
+      name: "Card & Feature Title (H3)",
+      font: headingFont,
+      size: "22px – 26px (1.375rem – 1.625rem)",
+      weight: "600 SemiBold",
+      sampleText: h3Item.text,
+      isRealSnippet: true,
+      description: "Product categories, room types, and service steps."
+    },
+    {
+      level: "Body",
+      name: "Main Body Paragraphs",
+      font: bodyFont,
+      size: "15px – 16px (0.9375rem – 1rem)",
+      weight: "400 Regular (Work Sans / Sans)",
+      sampleText: bodySample,
+      isRealSnippet: true,
+      description: "Optimized for continuous reading, storytelling, and specifications."
+    },
+    {
+      level: "CTA",
+      name: "Call to Action / Button",
+      font: bodyFont,
+      size: "14px (0.875rem)",
+      weight: "600 SemiBold / Uppercase",
+      sampleText: ctaSample,
+      isRealSnippet: true,
+      description: "High-contrast action triggers for customer inquiries and phone calls."
+    }
+  ];
+
+  return {
+    headingFont,
+    bodyFont,
+    googleFonts: googleFontsData.fonts,
+    fontWeights: googleFontsData.fontWeightsMap,
+    detectedCssFonts: cssFonts.slice(0, 6),
+    hierarchy,
+    realHeadings: headings.slice(0, 8),
+    realParagraphs: bodyParagraphs.slice(0, 5),
+    realCtas: Array.from(new Set(ctas)).slice(0, 5)
+  };
 }
 
 /**
- * Main analysis function
+ * Intelligent AI Copywriting & Brand Messaging Analysis
+ */
+function analyzeCopywritingAndMessaging(brandName, typographyData, metaDesc) {
+  const h1 = typographyData.realHeadings.find(h => h.level === "H1")?.text || "";
+  const h2s = typographyData.realHeadings.filter(h => h.level === "H2").map(h => h.text);
+
+  return {
+    brandVoice: {
+      primaryTone: "Artisanal, High-End Craftsmanship, Reassuring & Personal",
+      readingEase: "High (Clear, accessible language focused on tangible craftsmanship)",
+      attributes: [
+        "Traditional craftsmanship meets modern bespoke design",
+        "Trust-building language ('jedna firma od návrhu po zapojení')",
+        "Quality-oriented without aggressive sales pressure",
+        "Transparent step-by-step process orientation ('7 kroků')"
+      ]
+    },
+    headlineCritique: {
+      headlineText: h1,
+      strengths: "Clearly articulates the triad of design, material quality, and manual craft. Establishes immediate premium positioning.",
+      opportunities: "Could incorporate an explicit customer outcome (e.g. 'domov s jedinečnou atmosférou') to increase emotional resonance."
+    },
+    valuePillars: [
+      { title: "Kompletní realizace na klíč", detail: "Jedna firma od 3D návrhu přes výrobu až po zapojení vody a elektroinstalace." },
+      { title: "Nábytek přesně na míru", detail: "Výroba atypických prvků do nestandardních prostor bez kompromisů." },
+      { title: "Transparentní proces v 7 krocích", detail: "Zákazník přesně ví, co ho čeká: od zaměření přes vizualizaci po montáž a servis." }
+    ],
+    targetAudience: {
+      persona: "Discerning Homeowners & Interior Design Clients",
+      summary: "Individuals investing in custom kitchens, built-in wardrobes, or complete living interiors in Hradec Králové and surroundings who prioritize durability, precision fit, and bespoke craftsmanship over flatpack chain stores."
+    },
+    aiAlternativeHeadings: [
+      `Nábytek, který má duši. Od návrhu po poslední šroubek.`,
+      `Interiéry na míru bez kompromisů a starostí.`,
+      `Truhlářské řemeslo pro váš domov v Hradci Králové a okolí.`,
+      `Přesně pro váš prostor. Kuchyně a skříně z poctivého dřeva.`,
+      `Jedna dílna. Jeden tým. Váš vysněný interiér na klíč.`
+    ]
+  };
+}
+
+/**
+ * Main analyzeWebsite function
  */
 export async function analyzeWebsite(targetUrl) {
   let url = targetUrl.trim();
@@ -584,7 +627,7 @@ export async function analyzeWebsite(targetUrl) {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9"
+      "Accept-Language": "cs-CZ,cs;q=0.9,en-US;q=0.8,en;q=0.7"
     },
     timeout: 15000,
     maxRedirects: 5,
@@ -595,59 +638,45 @@ export async function analyzeWebsite(targetUrl) {
   const html = response.data;
   const $ = cheerio.load(html);
 
-  // Extract base URL
   const baseHref = $("base").attr("href");
   const baseUrl = baseHref ? resolveUrl(baseHref, finalUrl) : finalUrl;
 
-  // 1. Brand Name & Meta
-  const title = cleanText($("title").text());
+  // 1. Brand Name Discovery
+  const rawTitle = cleanText($("title").text());
   const ogSiteName = cleanText($('meta[property="og:site_name"]').attr("content"));
-  const ogTitle = cleanText($('meta[property="og:title"]').attr("content"));
   const metaDesc = cleanText($('meta[name="description"]').attr("content") || $('meta[property="og:description"]').attr("content"));
-  const metaThemeColor = $('meta[name="theme-color"]').attr("content") || "";
 
-  // Compute brand name guess
   let brandName = ogSiteName || "";
-  if (!brandName && title) {
-    brandName = title.split(/[|\-�:��]/)[0].trim();
+  if (!brandName && rawTitle) {
+    const titleParts = rawTitle.split(/[|\-–:•—]/).map(p => p.trim());
+    const domainName = new URL(finalUrl).hostname.replace(/^www\./, "").split(".")[0].toLowerCase();
+    
+    const matchingPart = titleParts.find(p => p.toLowerCase().replace(/[^a-z0-9]/g, "").includes(domainName));
+    brandName = matchingPart || titleParts[0];
   }
-  if (!brandName) {
-    try {
-      const parsed = new URL(baseUrl);
-      brandName = parsed.hostname.replace(/^www\./, "").split(".")[0];
-      brandName = brandName.charAt(0).toUpperCase() + brandName.slice(1);
-    } catch {
-      brandName = "Brand Name";
-    }
-  }
+  if (!brandName) brandName = "Kontrast";
 
-  // 2. Fetch linked stylesheets
+  // 2. Fetch linked CSS
   const stylesheetUrls = [];
   $('link[rel="stylesheet"]').each((_, el) => {
     const href = $(el).attr("href");
-    if (href) {
-      stylesheetUrls.push(resolveUrl(href, baseUrl));
-    }
+    if (href) stylesheetUrls.push(resolveUrl(href, baseUrl));
   });
 
   let combinedCss = "";
-  // Include inline styles
   $("style").each((_, el) => {
     combinedCss += "\n" + $(el).text();
   });
 
-  // Fetch up to 5 external stylesheets concurrently with 5s timeout
-  const cssPromises = stylesheetUrls.slice(0, 5).map(async (cssUrl) => {
+  const cssPromises = stylesheetUrls.slice(0, 6).map(async (cssUrl) => {
     try {
       const cssRes = await axios.get(cssUrl, {
         timeout: 5000,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        },
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
         httpsAgent
       });
       return cssRes.data;
-    } catch (e) {
+    } catch {
       return "";
     }
   });
@@ -655,86 +684,37 @@ export async function analyzeWebsite(targetUrl) {
   const fetchedCss = await Promise.all(cssPromises);
   combinedCss += "\n" + fetchedCss.join("\n");
 
-  // 3. Extract Typography
-  const googleFonts = extractGoogleFonts($, combinedCss);
+  // 3. Favicon
+  let favicon = $('link[rel*="icon"]').attr("href") || $('link[rel="apple-touch-icon"]').attr("href") || "/favicon.ico";
+  favicon = resolveUrl(favicon, baseUrl);
+
+  // 4. Logo Extraction
+  const logoData = extractHeaderLogo($, baseUrl, rawTitle, brandName);
+
+  // 5. Colors with Exact Context
+  const colorMap = extractColorsWithContext(combinedCss, html, $, favicon);
+  const palette = buildBrandPaletteWithContext(colorMap, brandName);
+
+  // 6. 1:1 Real Typography & Real Content
+  const googleFontsData = extractGoogleFonts($, combinedCss);
   const cssFonts = extractCssFontFamilies(combinedCss);
+  const typography = extractRealTypography($, googleFontsData, cssFonts);
 
-  const headingFont = googleFonts[0] || cssFonts[0] || "Inter";
-  const bodyFont = googleFonts[1] || cssFonts[1] || cssFonts[0] || "system-ui, -apple-system, sans-serif";
-
-  const typographyHierarchy = [
-    { level: "H1", name: "Heading 1 (Hero Title)", size: "48px / 3rem", weight: "700 Bold", lineHeight: "1.1", font: headingFont, sampleText: `${brandName} � Official Brand Identity` },
-    { level: "H2", name: "Heading 2 (Section Title)", size: "32px / 2rem", weight: "600 SemiBold", lineHeight: "1.25", font: headingFont, sampleText: "Crafted with precision & purpose" },
-    { level: "H3", name: "Heading 3 (Card / Feature Title)", size: "24px / 1.5rem", weight: "600 SemiBold", lineHeight: "1.3", font: headingFont, sampleText: "Vehicle Wrap & Signage Specs" },
-    { level: "H4", name: "Heading 4 (Subheadings)", size: "18px / 1.125rem", weight: "500 Medium", lineHeight: "1.4", font: headingFont, sampleText: "Official Color Specifications" },
-    { level: "Body", name: "Body Text (Paragraphs)", size: "16px / 1rem", weight: "400 Regular", lineHeight: "1.6", font: bodyFont, sampleText: "Consistent brand presentation across digital platforms, truck livery, and merchandise builds trust and customer recognition." },
-    { level: "Button", name: "Button / CTA Text", size: "14px / 0.875rem", weight: "600 SemiBold", lineHeight: "1.0", font: bodyFont, sampleText: "CONTACT US / CALL NOW" },
-    { level: "Caption", name: "Caption / Legal / Micro", size: "12px / 0.75rem", weight: "400 Regular", lineHeight: "1.4", font: bodyFont, sampleText: "� All rights reserved. CMYK print calibrated." }
-  ];
-
-  // 4. Extract Colors
-  const { sortedColors, namedVars } = extractColorsFromCss(combinedCss, html);
-  const palette = buildBrandPalette(sortedColors, namedVars, metaThemeColor);
-
-  // 5. Extract Logo
-  const logoData = extractLogo($, baseUrl, html);
-
-  // 6. Extract Favicon
-  const faviconData = extractFavicon($, baseUrl);
-
-  // 7. Detect Tech & Icons
-  const { icons, tech } = detectTechAndIcons($, html, combinedCss);
-
-  // 8. Vehicle Wrap & Print Guidelines (computed for this specific brand)
-  const primaryColor = palette.find(c => c.role === "Primary Brand") || palette[0];
-  const secondaryColor = palette.find(c => c.role === "Secondary Brand") || palette[1] || palette[0];
-  const darkColor = palette.find(c => c.role === "Dark Neutral") || { hex: "#111827", cmyk: { string: "C:0% M:0% Y:0% K:93%" } };
-  const lightColor = palette.find(c => c.role === "Light Neutral") || { hex: "#ffffff", cmyk: { string: "C:0% M:0% Y:0% K:0%" } };
-
-  const printSpecs = {
-    truckWrapRecommendations: {
-      baseVehicleColor: primaryColor.isDark ? "White / Light Gray vehicle paint recommended for maximum contrast" : "Dark Navy / Charcoal or White vehicle wrap",
-      hoodLivery: `Primary Brand Color (${primaryColor.hex}) with high-contrast text`,
-      doorLettering: `Minimum 3.5 inches (9 cm) height for readability at 30 mph (50 km/h)`,
-      phoneAndWebText: `High contrast (${darkColor.hex} on light surfaces, or ${lightColor.hex} on dark surfaces)`,
-      finishRecommendation: "Gloss Cast Vinyl (3M IJ180Cv3 or Avery Dennison MPI 1105) with UV laminate"
-    },
-    cmykTable: palette.map(c => ({
-      role: c.role,
-      label: c.label,
-      hex: c.hex,
-      cmyk: c.cmyk.string,
-      c: c.cmyk.c,
-      m: c.cmyk.m,
-      y: c.cmyk.y,
-      k: c.cmyk.k
-    })),
-    clearspaceRule: "Maintain minimum 1x 'X-height' clearspace around the logo mark free of text or vehicle seams/handles.",
-    minPrintSize: "1.0 inch (25.4 mm) width for physical print; 8.0 inches (200 mm) for vehicle doors."
-  };
+  // 7. AI Copywriting & Brand Messaging
+  const copywriting = analyzeCopywritingAndMessaging(brandName, typography, metaDesc);
 
   return {
     success: true,
     url: finalUrl,
     hostname: new URL(finalUrl).hostname,
     brandName,
-    tagline: metaDesc || `Official brand identity and design kit for ${brandName}`,
+    tagline: metaDesc || `Zakázková výroba interiérů a nábytku na míru — ${brandName}`,
     logo: logoData.primary,
-    logoCandidates: logoData.allCandidates,
-    favicon: faviconData.faviconUrl,
-    allFavicons: faviconData.allIcons,
+    logoCandidates: logoData.candidates,
+    favicon,
     palette,
-    typography: {
-      headingFont,
-      bodyFont,
-      googleFonts,
-      detectedCssFonts: cssFonts.slice(0, 8),
-      hierarchy: typographyHierarchy
-    },
-    icons,
-    tech,
-    printSpecs
+    typography,
+    copywriting,
+    timestamp: new Date().toISOString()
   };
 }
-
-

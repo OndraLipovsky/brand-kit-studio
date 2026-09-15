@@ -10,14 +10,15 @@ import {
   Sparkles, 
   Wrench,
   FileCode,
-  Edit3
+  Edit3,
+  Truck
 } from "lucide-react";
 
-export default function OverviewTab({ brandData, setBrandData }) {
+export default function OverviewTab({ brandData, setBrandData, onOpenFleetModal }) {
   const [logoBg, setLogoBg] = useState("dark"); // "dark" | "light" | "grid"
   const [showCandidatePicker, setShowCandidatePicker] = useState(false);
-  const [customLogoUrl, setCustomLogoUrl] = useState("");
   const [isEditingBrandInfo, setIsEditingBrandInfo] = useState(false);
+  const [isEditingLogo, setIsEditingLogo] = useState(false);
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
@@ -130,7 +131,7 @@ export default function OverviewTab({ brandData, setBrandData }) {
 
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
-            <span className="text-xs text-slate-500 block">Total Colors</span>
+            <span className="text-xs text-slate-500 block">Colors Analyzed</span>
             <span className="text-lg font-bold text-white">{brandData.palette.length} Swatches</span>
           </div>
           <div className="w-px h-10 bg-slate-800 hidden sm:block" />
@@ -186,24 +187,37 @@ export default function OverviewTab({ brandData, setBrandData }) {
 
             {/* Logo Display Canvas */}
             <div
-              className={`w-full min-h-[200px] sm:min-h-[260px] rounded-xl flex items-center justify-center p-8 transition-colors duration-300 relative border ${
+              className={`w-full min-h-[220px] sm:min-h-[260px] rounded-xl flex items-center justify-center p-8 transition-colors duration-300 relative border ${
                 logoBg === "light"
-                  ? "bg-slate-50 border-slate-200 text-slate-900"
+                  ? "bg-slate-50 border-slate-200 text-slate-950"
                   : logoBg === "grid"
                   ? "bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px] bg-slate-950 border-slate-800 text-white"
                   : "bg-slate-950 border-slate-800 text-white"
               }`}
             >
               {brandData.logo.type === "text" ? (
-                <div className="text-center">
+                <div className="text-center flex flex-col items-center">
                   <span
-                    className="text-4xl sm:text-5xl font-black tracking-tight"
-                    style={{ fontFamily: brandData.typography.headingFont }}
+                    className="text-4xl sm:text-5xl font-black tracking-tight leading-none"
+                    style={{
+                      fontFamily: brandData.typography.headingFont,
+                      color: logoBg === "light" ? "#1e242b" : "#ffffff"
+                    }}
                   >
                     {brandData.logo.textWordmark}
                   </span>
-                  <p className="mt-2 text-xs opacity-60">
-                    Detected as a stylized header text wordmark
+                  {brandData.logo.subtitleWordmark && (
+                    <span
+                      className={`text-xs uppercase tracking-[0.28em] font-semibold mt-2.5 ${
+                        logoBg === "light" ? "text-slate-600" : "text-slate-400"
+                      }`}
+                      style={{ fontFamily: brandData.typography.bodyFont }}
+                    >
+                      {brandData.logo.subtitleWordmark}
+                    </span>
+                  )}
+                  <p className="mt-3 text-[11px] opacity-60">
+                    Extracted from website header navigation
                   </p>
                 </div>
               ) : brandData.logo.type === "svg" ? (
@@ -218,28 +232,69 @@ export default function OverviewTab({ brandData, setBrandData }) {
                   className="max-h-28 max-w-full object-contain filter drop-shadow-md"
                   crossOrigin="anonymous"
                   onError={(e) => {
-                    // Fallback to proxy if direct image blocked
                     e.currentTarget.src = `/api/proxy-image?url=${encodeURIComponent(brandData.logo.src)}`;
                   }}
                 />
               )}
             </div>
+
+            {/* Editable Wordmark inputs if text logo */}
+            {brandData.logo.type === "text" && isEditingLogo && (
+              <div className="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Primary Wordmark</label>
+                    <input
+                      type="text"
+                      value={brandData.logo.textWordmark}
+                      onChange={(e) => setBrandData(prev => ({
+                        ...prev,
+                        logo: { ...prev.logo, textWordmark: e.target.value }
+                      }))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-1">Subtitle / Descriptor</label>
+                    <input
+                      type="text"
+                      value={brandData.logo.subtitleWordmark || ""}
+                      onChange={(e) => setBrandData(prev => ({
+                        ...prev,
+                        logo: { ...prev.logo, subtitleWordmark: e.target.value }
+                      }))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Logo Actions & Alternatives */}
+          {/* Logo Actions */}
           <div className="mt-6 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-2">
+              {brandData.logo.type === "text" && (
+                <button
+                  onClick={() => setIsEditingLogo(!isEditingLogo)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 transition"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{isEditingLogo ? "Done" : "Edit Wordmark"}</span>
+                </button>
+              )}
+
               <button
                 onClick={handleDownloadLogo}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 transition"
               >
                 <Download className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Save Logo</span>
+                <span>Save Asset</span>
               </button>
 
               <label className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 cursor-pointer transition">
                 <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Replace / Upload</span>
+                <span>Upload Replacement</span>
                 <input
                   type="file"
                   accept="image/*,.svg"
@@ -250,14 +305,12 @@ export default function OverviewTab({ brandData, setBrandData }) {
             </div>
 
             {brandData.logoCandidates && brandData.logoCandidates.length > 1 && (
-              <div>
-                <button
-                  onClick={() => setShowCandidatePicker(!showCandidatePicker)}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 font-medium underline"
-                >
-                  {showCandidatePicker ? "Hide other candidates" : `View ${brandData.logoCandidates.length} detected alternatives`}
-                </button>
-              </div>
+              <button
+                onClick={() => setShowCandidatePicker(!showCandidatePicker)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-medium underline"
+              >
+                {showCandidatePicker ? "Hide candidates" : `View ${brandData.logoCandidates.length} detected alternatives`}
+              </button>
             )}
           </div>
 
@@ -265,7 +318,7 @@ export default function OverviewTab({ brandData, setBrandData }) {
           {showCandidatePicker && (
             <div className="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800">
               <p className="text-xs font-semibold text-slate-400 mb-3">
-                Select another logo or graphic found in the header/navigation:
+                Select another logo or graphic found on the website:
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {brandData.logoCandidates.map((cand, idx) => (
@@ -275,9 +328,16 @@ export default function OverviewTab({ brandData, setBrandData }) {
                     className="p-3 rounded-lg border border-slate-800 hover:border-indigo-500 bg-slate-900 text-left transition flex flex-col items-center justify-center text-center space-y-2 group"
                   >
                     {cand.type === "text" ? (
-                      <span className="font-bold text-sm text-white truncate w-full">
-                        "{cand.textWordmark}"
-                      </span>
+                      <div className="truncate w-full">
+                        <span className="font-bold text-sm text-white block truncate">
+                          "{cand.textWordmark}"
+                        </span>
+                        {cand.subtitleWordmark && (
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            {cand.subtitleWordmark}
+                          </span>
+                        )}
+                      </div>
                     ) : cand.type === "svg" ? (
                       <div
                         className="h-8 flex items-center justify-center [&>svg]:h-7 [&>svg]:w-auto"
@@ -301,7 +361,7 @@ export default function OverviewTab({ brandData, setBrandData }) {
           )}
         </div>
 
-        {/* Favicon & Detected Tech (1 Column) */}
+        {/* Favicon & Side Panel */}
         <div className="space-y-6">
           {/* Favicon Card */}
           <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
@@ -343,78 +403,33 @@ export default function OverviewTab({ brandData, setBrandData }) {
                   {brandData.favicon ? brandData.favicon.split("/").pop() : "No favicon detected"}
                 </span>
                 <span className="text-[11px] text-slate-400 block mt-0.5">
-                  Used for browser tabs, mobile bookmarks & truck decals
+                  Used for browser tabs, bookmarks & mobile home screens
                 </span>
-              </div>
-            </div>
-
-            {/* Simulated browser tab preview */}
-            <div className="mt-4 p-3 rounded-xl bg-slate-950/80 border border-slate-800">
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-2">
-                Browser Tab Simulation
-              </span>
-              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/90 text-slate-200 text-xs max-w-xs shadow-inner border border-slate-700/60">
-                {brandData.favicon && (
-                  <img src={brandData.favicon} alt="" className="w-4 h-4 object-contain rounded-sm" />
-                )}
-                <span className="truncate font-medium">{brandData.brandName} &mdash; Official</span>
               </div>
             </div>
           </div>
 
-          {/* Tech & Icon Libraries Card */}
-          <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
-            <div className="flex items-center space-x-2 mb-4">
-              <FileCode className="w-5 h-5 text-pink-400" />
-              <h3 className="font-bold text-white">Detected Tech & Icons</h3>
+          {/* Optional Commercial Vehicle Wrap Callout */}
+          <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-emerald-400">
+                <Truck className="w-5 h-5" />
+                <h3 className="font-bold text-white text-sm">Vehicle & Fleet Livery</h3>
+              </div>
+              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
+                Optional
+              </span>
             </div>
-
-            <p className="text-xs text-slate-400 mb-3">
-              Libraries detected to replicate or emulate this website:
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Need commercial prints for trucks, vans, or physical signage matching this exact website?
             </p>
-
-            <div className="space-y-3">
-              <div>
-                <span className="text-[11px] text-slate-500 block mb-1.5 font-medium uppercase">
-                  Frontend Frameworks
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {brandData.tech && brandData.tech.length > 0 ? (
-                    brandData.tech.map((t, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
-                      >
-                        {t}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-slate-500">Standard Modern HTML/CSS</span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-slate-500 block mb-1.5 font-medium uppercase">
-                  Icon System
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {brandData.icons && brandData.icons.length > 0 ? (
-                    brandData.icons.map((icon, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2.5 py-1 text-xs font-medium rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20"
-                        title={icon.type}
-                      >
-                        {icon.name}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-slate-500">Inline SVGs / System Icons</span>
-                  )}
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={onOpenFleetModal}
+              className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-300 transition flex items-center justify-center space-x-2 border border-emerald-900/30"
+            >
+              <Truck className="w-4 h-4" />
+              <span>Open Vehicle Wrap & CMYK Specifier</span>
+            </button>
           </div>
         </div>
       </div>

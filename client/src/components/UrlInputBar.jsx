@@ -9,11 +9,10 @@ export default function UrlInputBar({
   error
 }) {
   const samplePresets = [
+    { label: "tskontrast.cz", url: "https://tskontrast.cz" },
     { label: "Stripe", url: "https://stripe.com" },
     { label: "Linear", url: "https://linear.app" },
-    { label: "GitHub", url: "https://github.com" },
-    { label: "Vercel", url: "https://vercel.com" },
-    { label: "Supabase", url: "https://supabase.com" }
+    { label: "Vercel", url: "https://vercel.com" }
   ];
 
   const handleSubmit = (e) => {
@@ -24,17 +23,16 @@ export default function UrlInputBar({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto my-8">
-      <div className="text-center mb-6">
+    <div className="w-full max-w-4xl mx-auto my-6">
+      <div className="text-center mb-5">
         <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-2">
-          Turn Any Website Into a Complete{" "}
+          Intelligent Website{" "}
           <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Brand Kit
+            Brand Kit & Copy Analyzer
           </span>
         </h1>
-        <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto">
-          Scrape header logos, favicons, typography scales, and color palettes with{" "}
-          <strong className="text-slate-200">CMYK print values for truck wraps</strong>, editable before PDF export.
+        <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto">
+          Scrape header logos, 1:1 real website fonts, exact color contexts, and AI copywriting analysis.
         </p>
       </div>
 
@@ -47,14 +45,14 @@ export default function UrlInputBar({
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Enter website URL (e.g. stripe.com or https://yourcompany.com)..."
+            placeholder="Enter website URL (e.g. https://tskontrast.cz or stripe.com)..."
             className="w-full bg-transparent border-0 text-white placeholder-slate-500 focus:outline-none focus:ring-0 text-sm sm:text-base px-2 py-2 font-medium"
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={isLoading || !url.trim()}
-            className="flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 transition-all shadow-md active:scale-95 shrink-0"
+            className="flex items-center space-x-2 px-5 py-3 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 transition-all shadow-md active:scale-95 shrink-0"
           >
             {isLoading ? (
               <>
@@ -63,7 +61,7 @@ export default function UrlInputBar({
               </>
             ) : (
               <>
-                <span>Extract Brand</span>
+                <span>Analyze Brand</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -83,7 +81,11 @@ export default function UrlInputBar({
               onAnalyze(preset.url);
             }}
             disabled={isLoading}
-            className="px-2.5 py-1 rounded-md bg-slate-900/80 border border-slate-800 hover:border-slate-600 hover:text-white transition text-slate-400"
+            className={`px-2.5 py-1 rounded-md border transition text-xs ${
+              preset.label === "tskontrast.cz"
+                ? "bg-indigo-950/40 border-indigo-700 text-indigo-300 font-semibold"
+                : "bg-slate-900/80 border-slate-800 hover:border-slate-600 text-slate-400 hover:text-white"
+            }`}
           >
             {preset.label}
           </button>
